@@ -1,4 +1,6 @@
 streamlit
 anthropic
+pandas
+matplotlib
 requests
 groq
