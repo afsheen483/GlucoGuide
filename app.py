@@ -38,8 +38,23 @@ def initialize_database():
 conn, cursor = initialize_database()
 
 def get_wearable_data():
+    WearableDeviceConnected = True
+    WearableDataAvailable = True
+
+    if not (WearableDeviceConnected and WearableDataAvailable):
+        st.error("Wearable device not connected or data unavailable")
+        return None, None, None
+
     try:
-        return 120.0, 140.0, 160.0
+        WearableFastingSugar = 120.0
+        WearablePreMealSugar = 140.0
+        WearablePostMealSugar = 160.0
+
+        if WearableFastingSugar is None or WearablePreMealSugar is None or WearablePostMealSugar is None:
+            st.error("Incomplete wearable data received")
+            return None, None, None
+
+        return WearableFastingSugar, WearablePreMealSugar, WearablePostMealSugar
     except Exception as e:
         st.error(f"Failed to fetch wearable data: {str(e)}")
         return None, None, None
@@ -151,7 +166,7 @@ def plot_trends(data):
 st.set_page_config(page_title="GlucoGuide", page_icon="", layout="wide")
 
 st.title("GlucoGuide: Diabetes Management System")
-st.markdown("Meal Planning and Blood Sugar Tracking")
+st.markdown("AI-Powered Meal Planning and Blood Sugar Tracking")
 
 if "user_id" not in st.session_state:
     st.session_state.user_id = "user_123"
@@ -159,10 +174,12 @@ user_id = st.session_state.user_id
 
 with st.sidebar:
     # st.header("Settings")
-    # if st.button("Reset Database"):
+    # if st.button("Reset Database (Testing)"):
     #     cursor.execute("DELETE FROM blood_sugar_data")
     #     cursor.execute("DELETE FROM meal_plans")
     #     conn.commit()
+    #     if "meal_plan_generated" in st.session_state:
+    #         del st.session_state.meal_plan_generated
     #     st.session_state.clear()
     #     st.rerun()
     
@@ -170,7 +187,7 @@ with st.sidebar:
     st.markdown("Wearable Device Integration")
     if st.button("Sync Wearable Data"):
         fasting, pre, post = get_wearable_data()
-        if fasting:
+        if fasting is not None and pre is not None and post is not None:
             st.session_state.update({
                 "fasting_sugar": fasting,
                 "pre_meal_sugar": pre,
@@ -264,7 +281,6 @@ with tab2:
     if trends_data:
         plot_trends(trends_data)
     else:
-        st.info("No historical data available")
-    
+        st.info("No historical data available. Sync wearable data or generate meal plans to populate")
 
 conn.close()
