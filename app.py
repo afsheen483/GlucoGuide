@@ -3,58 +3,64 @@ import sqlite3
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
-import requests  # wearable device API calls
 from groq import Groq  
 
 client = Groq(api_key=st.secrets["groq_api_key"])
 
-# Initialize SQLite database
-conn = sqlite3.connect("glucoguide.db")
-cursor = conn.cursor()
+def initialize_database():
+    conn = sqlite3.connect("glucoguide.db")
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS blood_sugar_data (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            date TEXT,
+            fasting_sugar REAL,
+            pre_meal_sugar REAL,
+            post_meal_sugar REAL
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS meal_plans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            date TEXT,
+            meal_plan TEXT,
+            is_favorite BOOLEAN DEFAULT 0
+        )
+    """)
+    
+    conn.commit()
+    return conn, cursor
 
-# Create tables for historical data and meal plans
-cursor.execute("""
-    CREATE TABLE IF NOT EXISTS blood_sugar_data (
-        user_id TEXT,
-        date TEXT,
-        fasting_sugar REAL,
-        pre_meal_sugar REAL,
-        post_meal_sugar REAL
-    )
-""")
-cursor.execute("""
-    CREATE TABLE IF NOT EXISTS meal_plans (
-        user_id TEXT,
-        date TEXT,
-        meal_plan TEXT,
-        is_favorite BOOLEAN
-    )
-""")
-conn.commit()
+conn, cursor = initialize_database()
 
-# Simulated wearable device API 
 def get_wearable_data():
     try:
-        return 120.0, 140.0, 160.0  # Simulated values
+        return 120.0, 140.0, 160.0  
     except Exception as e:
         st.error(f"Failed to fetch wearable data: {str(e)}")
         return None, None, None
 
-# Validate user inputs
 def validate_inputs(fasting_sugar, pre_meal_sugar, post_meal_sugar, dietary_preferences):
     errors = []
-    if fasting_sugar >= 50 and fasting_sugar <= 500:
-        errors.append("Fasting sugar level must be greater than or equal to 50.")
-    if pre_meal_sugar >= 70 and pre_meal_sugar <= 500:
-        errors.append("Pre-meal sugar level must be greater than or equal to 70.")
-    if post_meal_sugar >= 70 and post_meal_sugar <= 500:
-        errors.append("Post-meal sugar level must be greater than or equal to 70.")
+    
+    if not (50 <= fasting_sugar <= 500):
+        errors.append("Fasting sugar level must be between 50 and 500 mg/dL.")
+    
+    if not (70 <= pre_meal_sugar <= 500):
+        errors.append("Pre-meal sugar level must be between 70 and 500 mg/dL.")
+    
+    if not (70 <= post_meal_sugar <= 500):
+        errors.append("Post-meal sugar level must be between 70 and 500 mg/dL.")
+    
     if not dietary_preferences:
         errors.append("Dietary preferences cannot be empty.")
+    
     return errors
 
-
-# Generate health alerts based on blood sugar levels
 def generate_health_alerts(fasting_sugar, pre_meal_sugar, post_meal_sugar):
     alerts = []
     if fasting_sugar > 126:
@@ -65,48 +71,48 @@ def generate_health_alerts(fasting_sugar, pre_meal_sugar, post_meal_sugar):
         alerts.append("High post-meal sugar detected (>180 mg/dL). Consider consulting a doctor.")
     return alerts
 
-# Generate meal plan using Groq AI API
 def generate_meal_plan(fasting_sugar, pre_meal_sugar, post_meal_sugar, dietary_preferences):
     try:
         prompt = f"""
-        Generate a meal plan for a diabetic patient with the following details:
+        Generate a meal plan for a diabetic patient with:
         - Fasting sugar: {fasting_sugar} mg/dL
         - Pre-meal sugar: {pre_meal_sugar} mg/dL
         - Post-meal sugar: {post_meal_sugar} mg/dL
         - Dietary preferences: {dietary_preferences}
-        Recommend meals with a low glycemic index if sugar levels are high.
+        Include low glycemic index options if sugar levels are high.
+        Provide detailed nutritional information and portion sizes.
         """
+        
         response = client.chat.completions.create(
             messages=[
-                {"role": "system", "content": "You are a dietitian specializing in diabetic meal planning."},
+                {"role": "system", "content": "Expert dietitian specializing in diabetes management"},
                 {"role": "user", "content": prompt}
             ],
-            model="llama3-8b-8192"
+            model="llama3-8b-8192",
+            temperature=0.3,
+            max_tokens=1500
         )
         return response.choices[0].message.content
     except Exception as e:
         st.error(f"Error generating meal plan: {str(e)}")
         return None
 
-# Save blood sugar data to database
 def save_blood_sugar_data(user_id, fasting_sugar, pre_meal_sugar, post_meal_sugar):
-    date = datetime.now().strftime("%Y-%m-%d")
+    date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute("""
         INSERT INTO blood_sugar_data (user_id, date, fasting_sugar, pre_meal_sugar, post_meal_sugar)
         VALUES (?, ?, ?, ?, ?)
     """, (user_id, date, fasting_sugar, pre_meal_sugar, post_meal_sugar))
     conn.commit()
 
-# Save meal plan to database
 def save_meal_plan(user_id, meal_plan, is_favorite=False):
-    date = datetime.now().strftime("%Y-%m-%d")
+    date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute("""
         INSERT INTO meal_plans (user_id, date, meal_plan, is_favorite)
         VALUES (?, ?, ?, ?)
-    """, (user_id, date, meal_plan, is_favorite))
+    """, (user_id, date, meal_plan, int(is_favorite)))
     conn.commit()
 
-# Retrieve historical blood sugar data
 def get_blood_sugar_trends(user_id):
     cursor.execute("""
         SELECT date, fasting_sugar, pre_meal_sugar, post_meal_sugar
@@ -117,7 +123,6 @@ def get_blood_sugar_trends(user_id):
     """, (user_id,))
     return cursor.fetchall()
 
-# Retrieve saved meal plans
 def get_saved_meal_plans(user_id):
     cursor.execute("""
         SELECT date, meal_plan, is_favorite
@@ -127,10 +132,8 @@ def get_saved_meal_plans(user_id):
     """, (user_id,))
     return cursor.fetchall()
 
-# Plot blood sugar trends
 def plot_trends(data):
     if not data:
-        st.write("No historical data available to display trends.")
         return
     df = pd.DataFrame(data, columns=["Date", "Fasting Sugar", "Pre-Meal Sugar", "Post-Meal Sugar"])
     df["Date"] = pd.to_datetime(df["Date"])
@@ -145,80 +148,125 @@ def plot_trends(data):
     plt.grid(True)
     st.pyplot(plt)
 
-# Streamlit app
-st.title("GlucoGuide: Personalized Meal Planning for Diabetic Patients")
-st.markdown("""
-GlucoGuide is a personalized meal planning tool designed specifically for diabetic patients.
-By entering your sugar levels and dietary preferences, GlucoGuide generates meal plans that are tailored to help you manage your blood sugar levels effectively.
-""")
+st.set_page_config(page_title="GlucoGuide", page_icon="", layout="wide")
 
-# User ID (for simplicity, using a session state; in production, use proper authentication)
+# Main App
+st.title("GlucoGuide: Diabetes Management System")
+st.markdown("### AI-Powered Meal Planning and Blood Sugar Tracking")
+
+# User Session Management
 if "user_id" not in st.session_state:
-    st.session_state.user_id = "user1"  # Simulated user ID
+    st.session_state.user_id = "user_123"  # Simplified user management
 user_id = st.session_state.user_id
 
-# Wearable device integration
-st.subheader("Import Data from Wearable Device")
-if st.button("Connect to Wearable Device"):
-    fasting_sugar, pre_meal_sugar, post_meal_sugar = get_wearable_data()
-    if fasting_sugar is not None:
-        st.session_state.fasting_sugar = fasting_sugar
-        st.session_state.pre_meal_sugar = pre_meal_sugar
-        st.session_state.post_meal_sugar = post_meal_sugar
-        st.success("Successfully imported data from wearable device!")
+# Sidebar Controls
+with st.sidebar:
+    st.header("Settings")
+    if st.button("Reset Database (Testing)"):
+        cursor.execute("DELETE FROM blood_sugar_data")
+        cursor.execute("DELETE FROM meal_plans")
+        conn.commit()
+        st.session_state.clear()
+        st.rerun()
+    
+    st.markdown("---")
+    st.markdown("**Wearable Device Integration**")
+    if st.button("Sync Wearable Data"):
+        fasting, pre, post = get_wearable_data()
+        if fasting:
+            st.session_state.update({
+                "fasting_sugar": fasting,
+                "pre_meal_sugar": pre,
+                "post_meal_sugar": post
+            })
+            st.success("Data synced successfully!")
 
-# User inputs
-st.subheader("Enter Your Details")
-fasting_sugar = st.number_input("Fasting Sugar Levels (mg/dL)", min_value=0.0, value=st.session_state.get("fasting_sugar", 0.0))
-pre_meal_sugar = st.number_input("Pre-Meal Sugar Levels (mg/dL)", min_value=0.0, value=st.session_state.get("pre_meal_sugar", 0.0))
-post_meal_sugar = st.number_input("Post-Meal Sugar Levels (mg/dL)", min_value=0.0, value=st.session_state.get("post_meal_sugar", 0.0))
-dietary_preferences = st.text_input("Dietary Preferences (e.g., vegetarian, low-carb)")
+tab1, tab2 = st.tabs(["Meal Planner", "Health Dashboard"])
 
-# Input validation
-errors = validate_inputs(fasting_sugar, pre_meal_sugar, post_meal_sugar, dietary_preferences)
-if errors:
-    for error in errors:
-        st.error(error)
-else:
-    # Health alerts
-    alerts = generate_health_alerts(fasting_sugar, pre_meal_sugar, post_meal_sugar)
-    if alerts:
-        st.subheader("Health Alerts")
-        for alert in alerts:
-            st.warning(alert)
+with tab1:
+    st.header("Generate New Meal Plan")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        fasting_sugar = st.number_input("Fasting Sugar (mg/dL)", min_value=0.0, 
+                                      value=st.session_state.get("fasting_sugar", 90.0))
+        pre_meal_sugar = st.number_input("Pre-Meal Sugar (mg/dL)", min_value=0.0,
+                                       value=st.session_state.get("pre_meal_sugar", 110.0))
+    
+    with col2:
+        post_meal_sugar = st.number_input("Post-Meal Sugar (mg/dL)", min_value=0.0,
+                                        value=st.session_state.get("post_meal_sugar", 140.0))
+        dietary_preferences = st.selectbox("Dietary Preferences",
+                                         options=["", "Vegetarian", "Low-Carb", "Mediterranean",
+                                                  "Vegan", "Gluten-Free", "Diabetic-Friendly"],
+                                         index=1)  
+    
+    errors = validate_inputs(fasting_sugar, pre_meal_sugar, post_meal_sugar, dietary_preferences)
+    if errors:
+        for error in errors:
+            st.error(error)
 
-    # Generate meal plan
-    if st.button("Generate Meal Plan"):
-        meal_plan = generate_meal_plan(fasting_sugar, pre_meal_sugar, post_meal_sugar, dietary_preferences)
-        if meal_plan:
-            st.subheader("Your Personalized Meal Plan")
-            st.markdown(meal_plan)
+    disabled = len(errors) > 0
 
-            # Save blood sugar data and meal plan
-            save_blood_sugar_data(user_id, fasting_sugar, pre_meal_sugar, post_meal_sugar)
-            save_meal_plan(user_id, meal_plan)
+    if not disabled:
+        alerts = generate_health_alerts(fasting_sugar, pre_meal_sugar, post_meal_sugar)
+        if alerts:
+            st.warning("#### Health Alerts")
+            for alert in alerts:
+                st.markdown(f"{alert}")
 
-            # Option to mark as favorite
-            if st.checkbox("Mark this meal plan as a favorite"):
-                cursor.execute("UPDATE meal_plans SET is_favorite = 1 WHERE user_id = ? AND meal_plan = ?", (user_id, meal_plan))
-                conn.commit()
-                st.success("Meal plan marked as favorite!")
+    if st.button("Generate Personalized Meal Plan", use_container_width=True, disabled=disabled):
+        with st.spinner("Analyzing your metrics and creating optimal meal plan..."):
+            meal_plan = generate_meal_plan(fasting_sugar, pre_meal_sugar, 
+                                         post_meal_sugar, dietary_preferences)
+            
+            if meal_plan:
+                st.session_state.meal_plan_generated = True
+                save_blood_sugar_data(user_id, fasting_sugar, pre_meal_sugar, post_meal_sugar)
+                save_meal_plan(user_id, meal_plan)
+                
+                st.success("Meal Plan Generated Successfully!")
+                st.markdown("---")
+                st.markdown(meal_plan)
+                
+                fav_col, _ = st.columns([1,3])
+                with fav_col:
+                    if st.button("Mark as Favorite"):
+                        cursor.execute("""
+                            UPDATE meal_plans SET is_favorite = 1 
+                            WHERE user_id = ? AND date = (
+                                SELECT MAX(date) FROM meal_plans WHERE user_id = ?
+                            )
+                        """, (user_id, user_id))
+                        conn.commit()
+                        st.rerun()
 
-# Display blood sugar trends
-st.subheader("Blood Sugar Trends (Last 7 Days)")
-trends_data = get_blood_sugar_trends(user_id)
-plot_trends(trends_data)
+    st.markdown("---")
+    st.header("Saved Meal Plans")
+    
+    if 'meal_plan_generated' in st.session_state:
+        saved_plans = get_saved_meal_plans(user_id)
+        if saved_plans:
+            for date, plan, favorite in saved_plans:
+                with st.expander(f"{date.split()[0]} {'' if favorite else ''}"):
+                    st.markdown(plan)
+                    if st.button("Delete", key=f"del_{date}"):
+                        cursor.execute("DELETE FROM meal_plans WHERE date = ?", (date,))
+                        conn.commit()
+                        st.rerun()
+        else:
+            st.info("No saved meal plans found. Generate one to get started!")
+    else:
+        st.info("Generate your first meal plan to see saved plans here")
 
-# Display saved meal plans
-st.subheader("Saved Meal Plans")
-saved_plans = get_saved_meal_plans(user_id)
-if saved_plans:
-    for date, meal_plan, is_favorite in saved_plans:
-        st.markdown(f"**Date:** {date} {'(Favorite)' if is_favorite else ''}")
-        st.markdown(meal_plan)
-        st.markdown("---")
-else:
-    st.write("No saved meal plans available.")
+with tab2:
+    st.header("Health Dashboard")
+    
+    st.subheader("Blood Sugar Trends")
+    trends_data = get_blood_sugar_trends(user_id)
+    if trends_data:
+        plot_trends(trends_data)
+    else:
+        st.info("No historical data available.")
 
-# Close database connection
 conn.close()
