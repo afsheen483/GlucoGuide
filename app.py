@@ -42,16 +42,14 @@ def get_wearable_data():
 
 # Validate user inputs
 def validate_inputs(fasting_sugar, pre_meal_sugar, post_meal_sugar, dietary_preferences):
-    errors = []
-    if fasting_sugar < 0:
-        errors.append("Fasting sugar level must be greater than or equal to 0.")
-    if pre_meal_sugar < 0:
-        errors.append("Pre-meal sugar level must be greater than or equal to 0.")
-    if post_meal_sugar < 0:
-        errors.append("Post-meal sugar level must be greater than or equal to 0.")
-    if not dietary_preferences:
-        errors.append("Dietary preferences cannot be empty.")
-    return errors
+    alerts = []
+    if fasting_sugar > 126:
+        alerts.append("High fasting sugar detected (>126 mg/dL). Consider consulting a doctor.")
+    if pre_meal_sugar > 130:
+        alerts.append("High pre-meal sugar detected (>130 mg/dL). Consider consulting a doctor.")
+    if post_meal_sugar > 180:
+        alerts.append("High post-meal sugar detected (>180 mg/dL). Consider consulting a doctor.")
+    return alerts
 
 # Generate health alerts based on blood sugar levels
 def generate_health_alerts(fasting_sugar, pre_meal_sugar, post_meal_sugar):
