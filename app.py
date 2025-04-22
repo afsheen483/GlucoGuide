@@ -39,7 +39,7 @@ conn, cursor = initialize_database()
 
 def get_wearable_data():
     try:
-        return 120.0, 140.0, 160.0  
+        return 120.0, 140.0, 160.0
     except Exception as e:
         st.error(f"Failed to fetch wearable data: {str(e)}")
         return None, None, None
@@ -150,27 +150,24 @@ def plot_trends(data):
 
 st.set_page_config(page_title="GlucoGuide", page_icon="", layout="wide")
 
-# Main App
 st.title("GlucoGuide: Diabetes Management System")
-st.markdown("### AI-Powered Meal Planning and Blood Sugar Tracking")
+st.markdown("Meal Planning and Blood Sugar Tracking")
 
-# User Session Management
 if "user_id" not in st.session_state:
-    st.session_state.user_id = "user_123"  # Simplified user management
+    st.session_state.user_id = "user_123"
 user_id = st.session_state.user_id
 
-# Sidebar Controls
 with st.sidebar:
-    st.header("Settings")
-    if st.button("Reset Database (Testing)"):
-        cursor.execute("DELETE FROM blood_sugar_data")
-        cursor.execute("DELETE FROM meal_plans")
-        conn.commit()
-        st.session_state.clear()
-        st.rerun()
+    # st.header("Settings")
+    # if st.button("Reset Database"):
+    #     cursor.execute("DELETE FROM blood_sugar_data")
+    #     cursor.execute("DELETE FROM meal_plans")
+    #     conn.commit()
+    #     st.session_state.clear()
+    #     st.rerun()
     
-    st.markdown("---")
-    st.markdown("**Wearable Device Integration**")
+    # st.markdown("---")
+    st.markdown("Wearable Device Integration")
     if st.button("Sync Wearable Data"):
         fasting, pre, post = get_wearable_data()
         if fasting:
@@ -179,7 +176,7 @@ with st.sidebar:
                 "pre_meal_sugar": pre,
                 "post_meal_sugar": post
             })
-            st.success("Data synced successfully!")
+            st.success("Data synced successfully")
 
 tab1, tab2 = st.tabs(["Meal Planner", "Health Dashboard"])
 
@@ -199,24 +196,24 @@ with tab1:
         dietary_preferences = st.selectbox("Dietary Preferences",
                                          options=["", "Vegetarian", "Low-Carb", "Mediterranean",
                                                   "Vegan", "Gluten-Free", "Diabetic-Friendly"],
-                                         index=1)  
+                                         index=1)
     
     errors = validate_inputs(fasting_sugar, pre_meal_sugar, post_meal_sugar, dietary_preferences)
     if errors:
         for error in errors:
             st.error(error)
 
-    disabled = len(errors) > 0
+    button_disabled = len(errors) > 0
 
-    if not disabled:
+    if not button_disabled:
         alerts = generate_health_alerts(fasting_sugar, pre_meal_sugar, post_meal_sugar)
         if alerts:
-            st.warning("#### Health Alerts")
+            st.warning("Health Alerts")
             for alert in alerts:
                 st.markdown(f"{alert}")
 
-    if st.button("Generate Personalized Meal Plan", use_container_width=True, disabled=disabled):
-        with st.spinner("Analyzing your metrics and creating optimal meal plan..."):
+    if st.button("Generate Personalized Meal Plan", use_container_width=True, disabled=button_disabled):
+        with st.spinner("Analyzing your metrics and creating optimal meal plan"):
             meal_plan = generate_meal_plan(fasting_sugar, pre_meal_sugar, 
                                          post_meal_sugar, dietary_preferences)
             
@@ -225,7 +222,7 @@ with tab1:
                 save_blood_sugar_data(user_id, fasting_sugar, pre_meal_sugar, post_meal_sugar)
                 save_meal_plan(user_id, meal_plan)
                 
-                st.success("Meal Plan Generated Successfully!")
+                st.success("Meal Plan Generated Successfully")
                 st.markdown("---")
                 st.markdown(meal_plan)
                 
@@ -248,14 +245,14 @@ with tab1:
         saved_plans = get_saved_meal_plans(user_id)
         if saved_plans:
             for date, plan, favorite in saved_plans:
-                with st.expander(f"{date.split()[0]} {'' if favorite else ''}"):
+                with st.expander(f"{date.split()[0]} {'Favorite' if favorite else ''}"):
                     st.markdown(plan)
                     if st.button("Delete", key=f"del_{date}"):
                         cursor.execute("DELETE FROM meal_plans WHERE date = ?", (date,))
                         conn.commit()
                         st.rerun()
         else:
-            st.info("No saved meal plans found. Generate one to get started!")
+            st.info("No saved meal plans found. Generate one to get started")
     else:
         st.info("Generate your first meal plan to see saved plans here")
 
@@ -267,6 +264,7 @@ with tab2:
     if trends_data:
         plot_trends(trends_data)
     else:
-        st.info("No historical data available.")
+        st.info("No historical data available")
+    
 
 conn.close()
