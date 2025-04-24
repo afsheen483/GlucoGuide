@@ -173,17 +173,17 @@ if "user_id" not in st.session_state:
 user_id = st.session_state.user_id
 
 with st.sidebar:
-    # st.header("Settings")
-    # if st.button("Reset Database (Testing)"):
-    #     cursor.execute("DELETE FROM blood_sugar_data")
-    #     cursor.execute("DELETE FROM meal_plans")
-    #     conn.commit()
-    #     if "meal_plan_generated" in st.session_state:
-    #         del st.session_state.meal_plan_generated
-    #     st.session_state.clear()
-    #     st.rerun()
+    st.header("Settings")
+    if st.button("Reset Database (Testing)"):
+        cursor.execute("DELETE FROM blood_sugar_data")
+        cursor.execute("DELETE FROM meal_plans")
+        conn.commit()
+        if "meal_plan_generated" in st.session_state:
+            del st.session_state.meal_plan_generated
+        st.session_state.clear()
+        st.rerun()
     
-    # st.markdown("---")
+    st.markdown("---")
     st.markdown("Wearable Device Integration")
     if st.button("Sync Wearable Data"):
         fasting, pre, post = get_wearable_data()
